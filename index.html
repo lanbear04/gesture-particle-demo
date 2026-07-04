@@ -1,0 +1,255 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>手势粒子交互系统</title>
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+      html,
+      body {
+        width: 100%;
+        height: 100%;
+        overflow: hidden;
+        background: #000;
+        font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+        color: #eee;
+      }
+      #stage {
+        position: fixed;
+        inset: 0;
+      }
+      body.immersive #ui,
+      body.immersive #fps,
+      body.immersive #tuning-panel {
+        display: none !important;
+      }
+      body.immersive #stage {
+        cursor: none;
+      }
+      /* 摄像头视频：镜像显示，作为半透明背景便于对齐手部 */
+      #video {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        transform: scaleX(-1);
+        opacity: 0.15;
+        pointer-events: none;
+        transition: opacity 0.25s;
+      }
+      /* 镜头可见度三档：关闭 / 淡显(默认) / 清晰 */
+      #video.cam-off {
+        opacity: 0;
+      }
+      #video.cam-clear {
+        opacity: 0.9;
+      }
+      #canvas {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        display: block;
+      }
+      /* 控制栏 */
+      #ui {
+        position: fixed;
+        left: 50%;
+        bottom: 28px;
+        transform: translateX(-50%);
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 10px 16px;
+        background: rgba(20, 20, 28, 0.6);
+        backdrop-filter: blur(8px);
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        border-radius: 999px;
+        z-index: 10;
+        user-select: none;
+      }
+      #ui button {
+        appearance: none;
+        border: 1px solid rgba(255, 255, 255, 0.18);
+        background: rgba(255, 255, 255, 0.06);
+        color: #eee;
+        font-size: 14px;
+        padding: 8px 16px;
+        border-radius: 999px;
+        cursor: pointer;
+        transition: background 0.15s, border-color 0.15s;
+      }
+      #ui button:hover {
+        background: rgba(255, 255, 255, 0.14);
+      }
+      #ui button.active {
+        background: #2b6cff;
+        border-color: #2b6cff;
+        color: #fff;
+      }
+      #status {
+        font-size: 13px;
+        opacity: 0.8;
+        min-width: 120px;
+        text-align: center;
+      }
+      /* 加载 / 错误覆盖层 */
+      #overlay {
+        position: fixed;
+        inset: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-direction: column;
+        gap: 12px;
+        text-align: center;
+        padding: 24px;
+        background: rgba(0, 0, 0, 0.85);
+        z-index: 20;
+        font-size: 15px;
+        line-height: 1.6;
+      }
+      #overlay.hidden {
+        display: none;
+      }
+      #overlay .hint {
+        font-size: 13px;
+        opacity: 0.7;
+        max-width: 480px;
+      }
+      #fps {
+        position: fixed;
+        top: 12px;
+        left: 12px;
+        font-size: 12px;
+        font-variant-numeric: tabular-nums;
+        opacity: 0.6;
+        z-index: 10;
+      }
+      #tuning-panel {
+        position: fixed;
+        top: 16px;
+        right: 16px;
+        width: min(340px, calc(100vw - 32px));
+        max-height: calc(100vh - 112px);
+        overflow: auto;
+        padding: 14px;
+        background: rgba(14, 16, 24, 0.78);
+        border: 1px solid rgba(255, 255, 255, 0.14);
+        border-radius: 8px;
+        backdrop-filter: blur(10px);
+        z-index: 11;
+        user-select: none;
+      }
+      #tuning-panel.hidden {
+        display: none;
+      }
+      .tuning-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        flex-wrap: wrap;
+        margin-bottom: 10px;
+      }
+      .tuning-title {
+        font-size: 14px;
+        font-weight: 650;
+      }
+      .tuning-actions {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+      }
+      .tuning-reset,
+      .tuning-save {
+        appearance: none;
+        border: 1px solid rgba(255, 255, 255, 0.18);
+        background: rgba(255, 255, 255, 0.08);
+        color: #eee;
+        border-radius: 6px;
+        padding: 6px 10px;
+        cursor: pointer;
+      }
+      .tuning-group {
+        padding-top: 10px;
+        margin-top: 10px;
+        border-top: 1px solid rgba(255, 255, 255, 0.1);
+      }
+      .tuning-group:first-of-type {
+        border-top: 0;
+        margin-top: 0;
+        padding-top: 0;
+      }
+      .tuning-group-title {
+        margin-bottom: 8px;
+        color: rgba(255, 255, 255, 0.72);
+        font-size: 12px;
+      }
+      .tuning-row {
+        display: grid;
+        grid-template-columns: minmax(98px, 1fr) 148px 46px;
+        align-items: center;
+        gap: 8px;
+        min-height: 30px;
+        margin: 5px 0;
+        font-size: 12px;
+      }
+      .tuning-row input[type="range"] {
+        width: 100%;
+        accent-color: #62d6ff;
+      }
+      .tuning-value {
+        color: rgba(255, 255, 255, 0.78);
+        font-variant-numeric: tabular-nums;
+        text-align: right;
+      }
+      @media (max-width: 720px) {
+        #tuning-panel {
+          top: 10px;
+          right: 10px;
+          left: 10px;
+          width: auto;
+          max-height: calc(100vh - 120px);
+        }
+        .tuning-row {
+          grid-template-columns: minmax(86px, 1fr) minmax(110px, 1.2fr) 42px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div id="stage">
+      <video id="video" playsinline muted></video>
+      <canvas id="canvas"></canvas>
+    </div>
+
+    <div id="fps">FPS: --</div>
+
+    <div id="ui">
+      <button id="mode-explosion" data-mode="explosion">爆炸</button>
+      <button id="mode-vortex" data-mode="vortex">旋涡</button>
+      <button id="mode-heart" data-mode="heart">爱心 ♥</button>
+      <button id="mode-shuttle" data-mode="shuttle">穿梭 🚀</button>
+      <button id="toggle-camera" title="切换镜头显示（C）">镜头：淡显</button>
+      <button id="toggle-landmarks" title="切换关键点骨架（H）">关键点：关</button>
+      <button id="toggle-fullscreen" title="全屏展示（F）">全屏</button>
+      <span id="status">初始化中…</span>
+    </div>
+
+    <div id="overlay">
+      <div id="overlay-msg">正在加载手势识别模型…</div>
+      <div class="hint">
+        需要授权摄像头。请在浏览器弹窗中点击「允许」。建议在光线充足的环境下使用。
+      </div>
+    </div>
+
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
