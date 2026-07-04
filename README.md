@@ -1,6 +1,6 @@
 # 手势粒子交互系统
 
-[![在线体验](https://img.shields.io/badge/🚀%20在线体验-点击访问-blue)](https://你的-vercel-或-github-pages-链接)
+[![在线体验](https://img.shields.io/badge/🚀%20在线体验-点击访问-blue)](https://lanbear04.github.io/gesture-particle-demo/)
 
 基于摄像头的单手手势粒子特效。用食指指尖隔空"画"出粒子，握拳变色，一键切换爆炸 / 旋涡 / 爱心 / 穿梭四种粒子模式；画面默认不额外显示食指指尖追踪点，方便沉浸展示。
 
