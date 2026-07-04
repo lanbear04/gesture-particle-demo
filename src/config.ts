@@ -2,10 +2,10 @@ import type { RGB } from "./types";
 
 // 全局可调参数集中在此，便于打磨阶段统一调参。
 
-/** MediaPipe 资源路径（本地，不依赖 CDN） */
+/** MediaPipe 资源路径（本地，不依赖 CDN；用相对路径适配子目录部署） */
 export const ASSETS = {
-  wasmDir: "/wasm",
-  modelPath: "/models/hand_landmarker.task",
+  wasmDir: "./wasm",
+  modelPath: "./models/hand_landmarker.task",
 } as const;
 
 /** 粒子系统参数 */
